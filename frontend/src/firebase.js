@@ -16,3 +16,7 @@ const firebaseConfig = {
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
 export const auth = getAuth(app);
+
+// Verifica que las URLs de Firebase y cualquier llamada a tu backend usen el dominio correcto en producción.
+// Ejemplo:
+// const API_URL = process.env.REACT_APP_API_URL || 'http://localhost:3001';
