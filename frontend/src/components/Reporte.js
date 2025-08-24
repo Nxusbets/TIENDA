@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Box, Typography, Button, MenuItem, Select, InputLabel, FormControl, TextField } from '@mui/material';
+import { Box, Button, MenuItem, Select, InputLabel, FormControl, TextField, Paper, Typography, Fade } from '@mui/material';
 import * as XLSX from 'xlsx';
 import { db } from '../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
@@ -63,6 +63,27 @@ function Reporte() {
       MetodoPago: v.metodoPago
     }));
 
+    // Calcular total de ingresos
+    const totalIngresos = ventasFiltradas.reduce((acc, v) => acc + (Number(v.total) || 0), 0);
+
+    // Agregar fila de total de ingresos al final
+    if (data.length > 0) {
+      data.push({
+        Fecha: '',
+        Usuario: '',
+        Total: '',
+        Productos: '',
+        MetodoPago: '',
+      });
+    }
+    data.push({
+      Fecha: '',
+      Usuario: '',
+      Total: `TOTAL INGRESOS: $${totalIngresos.toFixed(2)}`,
+      Productos: '',
+      MetodoPago: ''
+    });
+
     const ws = XLSX.utils.json_to_sheet(data);
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
@@ -101,61 +122,68 @@ function Reporte() {
   };
 
   return (
-    <Box sx={{ maxWidth: 600, mx: 'auto', bgcolor: '#fff', color: '#b71c1c', p: 4, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', mt: 4 }}>
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', textAlign: 'center' }}>
-        Reportes
-      </Typography>
-      <Box sx={{ mb: 4 }}>
-        <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Reporte de ventas</Typography>
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel id="periodo-label">Periodo</InputLabel>
-          <Select
-            labelId="periodo-label"
-            value={periodo}
-            label="Periodo"
-            onChange={e => setPeriodo(e.target.value)}
-          >
-            {PERIODOS.map(p => (
-              <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <TextField
-          label="Fecha base"
-          type="date"
-          variant="outlined"
-          fullWidth
-          InputLabelProps={{ shrink: true }}
-          value={fecha}
-          onChange={e => setFecha(e.target.value)}
-          sx={{ mb: 2 }}
-        />
-        <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleDescargarVentas}>
-          Descargar reporte de ventas
-        </Button>
-      </Box>
-      <Box>
-        <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Reporte de inventario</Typography>
-        <FormControl fullWidth sx={{ mb: 2 }}>
-          <InputLabel id="categoria-label">Categoría</InputLabel>
-          <Select
-            labelId="categoria-label"
-            value={categoria}
-            label="Categoría"
-            onChange={e => setCategoria(e.target.value)}
-          >
-            <MenuItem value="">Todas</MenuItem>
-            {categorias.map(cat => (
-              <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-            ))}
-          </Select>
-        </FormControl>
-        <Button variant="contained" color="primary" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleDescargarInventario}>
-          Descargar reporte de inventario
-        </Button>
-      </Box>
-      {confirmacion && <Typography sx={{ mt: 3, color: '#388e3c', textAlign: 'center', fontWeight: 'bold' }}>{confirmacion}</Typography>}
-    </Box>
+    <Fade in={true} timeout={400}>
+      <Paper elevation={3} sx={{ p: 3, borderRadius: 3, mb: 2 }}>
+        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom>
+          Reporte
+        </Typography>
+        <Box sx={{ maxWidth: 600, mx: 'auto', bgcolor: '#fff', color: '#b71c1c', p: 4, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', mt: 4 }}>
+          <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', textAlign: 'center' }}>
+            Reportes
+          </Typography>
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Reporte de ventas</Typography>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel id="periodo-label">Periodo</InputLabel>
+              <Select
+                labelId="periodo-label"
+                value={periodo}
+                label="Periodo"
+                onChange={e => setPeriodo(e.target.value)}
+              >
+                {PERIODOS.map(p => (
+                  <MenuItem key={p.value} value={p.value}>{p.label}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <TextField
+              label="Fecha base"
+              type="date"
+              variant="outlined"
+              fullWidth
+              InputLabelProps={{ shrink: true }}
+              value={fecha}
+              onChange={e => setFecha(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleDescargarVentas}>
+              Descargar reporte de ventas
+            </Button>
+          </Box>
+          <Box>
+            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Reporte de inventario</Typography>
+            <FormControl fullWidth sx={{ mb: 2 }}>
+              <InputLabel id="categoria-label">Categoría</InputLabel>
+              <Select
+                labelId="categoria-label"
+                value={categoria}
+                label="Categoría"
+                onChange={e => setCategoria(e.target.value)}
+              >
+                <MenuItem value="">Todas</MenuItem>
+                {categorias.map(cat => (
+                  <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+                ))}
+              </Select>
+            </FormControl>
+            <Button variant="contained" color="primary" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleDescargarInventario}>
+              Descargar reporte de inventario
+            </Button>
+          </Box>
+          {confirmacion && <Typography sx={{ mt: 3, color: '#388e3c', textAlign: 'center', fontWeight: 'bold' }}>{confirmacion}</Typography>}
+        </Box>
+      </Paper>
+    </Fade>
   );
 }
 

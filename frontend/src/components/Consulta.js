@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { db } from '../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
-import { Table, TableHead, TableRow, TableCell, TableBody, Tabs, Tab, Button, Box, Typography, TextField } from '@mui/material';
-import { doc, deleteDoc, updateDoc } from 'firebase/firestore';
+import { Table, TableHead, TableRow, TableCell, TableBody, Tabs, Tab, Button, Box, Typography, TextField, Paper, Fade } from '@mui/material';
 
 function Consulta({ usuario }) {
   const isAdmin = usuario === 'jericho888873@gmail.com';
@@ -12,6 +11,7 @@ function Consulta({ usuario }) {
   const [fecha, setFecha] = useState('');
   const [usuarioFiltro, setUsuarioFiltro] = useState('');
   const [resultados, setResultados] = useState([]);
+  const [busquedaInventario, setBusquedaInventario] = useState('');
 
   useEffect(() => {
     const fetchVentas = async () => {
@@ -60,82 +60,102 @@ function Consulta({ usuario }) {
   };
 
   return (
-    <div>
-      <h2>Consultas</h2>
-      <Tabs value={tab} onChange={(e, v) => setTab(v)}>
-        <Tab label="Ventas" />
-        <Tab label="Inventario" />
-      </Tabs>
-      {tab === 0 && (
-        <Box sx={{ maxWidth: 700, mx: 'auto', bgcolor: '#fff', color: '#b71c1c', p: 4, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', mt: 4 }}>
-          <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', textAlign: 'center' }}>
-            Consultas de ventas
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
-            <TextField
-              label="Usuario"
-              variant="outlined"
-              value={usuarioFiltro}
-              onChange={e => setUsuarioFiltro(e.target.value)}
-            />
-            <TextField
-              label="Fecha"
-              type="date"
-              variant="outlined"
-              InputLabelProps={{ shrink: true }}
-              value={fecha}
-              onChange={e => setFecha(e.target.value)}
-            />
-            <Button variant="contained" color="error" sx={{ fontWeight: 'bold' }} onClick={handleBuscar}>
-              Buscar
-            </Button>
-          </Box>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Fecha</TableCell>
-                <TableCell>Usuario</TableCell>
-                <TableCell>Total</TableCell>
-                <TableCell>Productos</TableCell>
-                <TableCell>Método de Pago</TableCell>
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {resultados.map((v, i) => (
-                <TableRow key={i}>
-                  <TableCell>{v.fecha}</TableCell>
-                  <TableCell>{v.usuario}</TableCell>
-                  <TableCell>{v.total}</TableCell>
-                  <TableCell>{v.productos.map(p => p.nombre).join(', ')}</TableCell>
-                  <TableCell>{v.metodoPago}</TableCell>
+    <Fade in={true} timeout={400}>
+      <Paper elevation={3} sx={{ p: 3, borderRadius: 3, mb: 2 }}>
+        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom>
+          Consulta
+        </Typography>
+        <Tabs value={tab} onChange={(e, v) => setTab(v)}>
+          <Tab label="Ventas" />
+          <Tab label="Inventario" />
+        </Tabs>
+        {tab === 0 && (
+          <Box sx={{ maxWidth: 700, mx: 'auto', bgcolor: '#fff', color: '#b71c1c', p: 4, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', mt: 4 }}>
+            <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', textAlign: 'center' }}>
+              Consultas de ventas
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, mb: 3 }}>
+              <TextField
+                label="Usuario"
+                variant="outlined"
+                value={usuarioFiltro}
+                onChange={e => setUsuarioFiltro(e.target.value)}
+              />
+              <TextField
+                label="Fecha"
+                type="date"
+                variant="outlined"
+                InputLabelProps={{ shrink: true }}
+                value={fecha}
+                onChange={e => setFecha(e.target.value)}
+              />
+              <Button variant="contained" color="error" sx={{ fontWeight: 'bold' }} onClick={handleBuscar}>
+                Buscar
+              </Button>
+            </Box>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Fecha</TableCell>
+                  <TableCell>Usuario</TableCell>
+                  <TableCell>Total</TableCell>
+                  <TableCell>Productos</TableCell>
+                  <TableCell>Método de Pago</TableCell>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Box>
-      )}
-      {tab === 1 && (
-        <Table>
-          <TableHead>
-            <TableRow>
-              <TableCell>Código</TableCell>
-              <TableCell>Nombre</TableCell>
-              <TableCell>Stock</TableCell>
-            </TableRow>
-          </TableHead>
-          <TableBody>
-            {inventario.map(p => (
-              <TableRow key={p.id}>
-                <TableCell>{p.codigo}</TableCell>
-                <TableCell>{p.nombre}</TableCell>
-                <TableCell>{p.stock}</TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      )}
-    </div>
+              </TableHead>
+              <TableBody>
+                {resultados.map((v, i) => (
+                  <TableRow key={i}>
+                    <TableCell>{v.fecha}</TableCell>
+                    <TableCell>{v.usuario}</TableCell>
+                    <TableCell>{v.total}</TableCell>
+                    <TableCell>{v.productos.map(p => p.nombre).join(', ')}</TableCell>
+                    <TableCell>{v.metodoPago}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
+        {tab === 1 && (
+          <Box sx={{ mb: 3 }}>
+            <TextField
+              label="Buscar producto por nombre"
+              variant="outlined"
+              fullWidth
+              sx={{ mb: 2 }}
+              value={busquedaInventario}
+              onChange={e => setBusquedaInventario(e.target.value)}
+            />
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Código</TableCell>
+                  <TableCell>Nombre</TableCell>
+                  <TableCell>Stock</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {inventario
+                  .filter(p =>
+                    !busquedaInventario.trim() ||
+                    (p.nombre && p.nombre.toLowerCase().includes(busquedaInventario.trim().toLowerCase()))
+                  )
+                  .map(p => (
+                    <TableRow key={p.id}>
+                      <TableCell>{p.codigo}</TableCell>
+                      <TableCell>{p.nombre}</TableCell>
+                      <TableCell>{p.stock}</TableCell>
+                    </TableRow>
+                  ))}
+              </TableBody>
+            </Table>
+          </Box>
+        )}
+      </Paper>
+    </Fade>
   );
 }
 
 export default Consulta;
+

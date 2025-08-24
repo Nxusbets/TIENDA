@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, TextField, Button, MenuItem, Select, InputLabel, FormControl, Table, TableHead, TableRow, TableCell, TableBody } from '@mui/material';
+import { Box, Typography, TextField, Button, MenuItem, Select, InputLabel, FormControl, Table, TableHead, TableRow, TableCell, TableBody, Paper, Fade, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { db } from '../firebase';
-import { collection, addDoc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
 
 const CATEGORIAS_DEFAULT = [
   'Hogar',
@@ -18,9 +18,8 @@ function Inventario({ usuario }) {
   const [nuevaCategoria, setNuevaCategoria] = useState('');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
   const [confirmacion, setConfirmacion] = useState('');
-  const [categoriaConsulta, setCategoriaConsulta] = useState('');
-  const [nombreConsulta, setNombreConsulta] = useState('');
-  const [productosConsulta, setProductosConsulta] = useState([]);
+  const [editOpen, setEditOpen] = useState(false);
+  const [editProducto, setEditProducto] = useState(null);
   const isAdmin = usuario === 'jericho888873@gmail.com';
 
   useEffect(() => {
@@ -87,131 +86,124 @@ function Inventario({ usuario }) {
     setTimeout(() => setConfirmacion(''), 2000);
   };
 
-  const handleConsultarPorCategoria = async () => {
-    if (!categoriaConsulta) return;
-    const q = query(collection(db, 'productos'), where('categoria', '==', categoriaConsulta));
-    const snapshot = await getDocs(q);
-    setProductosConsulta(snapshot.docs.map(doc => doc.data()));
+  const handleEditar = producto => {
+    setEditProducto({ ...producto });
+    setEditOpen(true);
   };
 
-  const handleBuscarPorNombre = async () => {
-    if (!nombreConsulta) return;
-    const q = query(collection(db, 'productos'), where('nombre', '==', nombreConsulta));
-    const snapshot = await getDocs(q);
-    setProductosConsulta(snapshot.docs.map(doc => doc.data()));
+  const handleEditChange = e => {
+    setEditProducto({ ...editProducto, [e.target.name]: e.target.value });
+  };
+
+  const handleGuardarEdicion = async () => {
+    if (!editProducto) return;
+    await updateDoc(doc(db, 'productos', editProducto.id), {
+      nombre: editProducto.nombre,
+      codigo: editProducto.codigo,
+      precioProveedor: Number(editProducto.precioProveedor),
+      precioCliente: Number(editProducto.precioCliente),
+      stock: Number(editProducto.stock),
+      categoria: editProducto.categoria
+    });
+    setEditOpen(false);
+    setEditProducto(null);
+    // Recargar productos
+    const snapshot = await getDocs(collection(db, 'productos'));
+    setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    setConfirmacion('Producto editado');
+    setTimeout(() => setConfirmacion(''), 2000);
+  };
+
+  const handleEliminarProducto = async id => {
+    await deleteDoc(doc(db, 'productos', id));
+    setProductos(productos.filter(p => p.id !== id));
+    setConfirmacion('Producto eliminado');
+    setTimeout(() => setConfirmacion(''), 2000);
   };
 
   return (
-    <Box sx={{ maxWidth: 700, mx: 'auto', bgcolor: '#fff', color: '#b71c1c', p: 4, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', mt: 4 }}>
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', textAlign: 'center' }}>
-        Inventario
-      </Typography>
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel id="categoria-label">Categoría</InputLabel>
-        <Select
-          labelId="categoria-label"
-          value={categoriaSeleccionada}
-          label="Categoría"
-          onChange={e => setCategoriaSeleccionada(e.target.value)}
-        >
-          {categorias.map(cat => (
-            <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      {isAdmin && (
-        <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-          <TextField
-            label="Nueva categoría"
-            variant="outlined"
-            value={nuevaCategoria}
-            onChange={e => setNuevaCategoria(e.target.value)}
-            sx={{ flex: 1 }}
-          />
-          <Button variant="contained" color="primary" onClick={handleAgregarCategoria}>
-            Agregar
-          </Button>
-        </Box>
-      )}
-      <TextField
-        label="Nombre del producto"
-        variant="outlined"
-        fullWidth
-        sx={{ mb: 2 }}
-        value={nuevo.nombre}
-        onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
-      />
-      <TextField
-        label="Código"
-        variant="outlined"
-        fullWidth
-        sx={{ mb: 2 }}
-        value={nuevo.codigo}
-        onChange={e => setNuevo({ ...nuevo, codigo: e.target.value })}
-      />
-      <TextField
-        label="Precio proveedor"
-        type="number"
-        variant="outlined"
-        fullWidth
-        sx={{ mb: 2 }}
-        value={nuevo.precioProveedor}
-        onChange={e => setNuevo({ ...nuevo, precioProveedor: e.target.value })}
-      />
-      <TextField
-        label="Precio cliente"
-        type="number"
-        variant="outlined"
-        fullWidth
-        sx={{ mb: 2 }}
-        value={nuevo.precioCliente}
-        onChange={e => setNuevo({ ...nuevo, precioCliente: e.target.value })}
-      />
-      <TextField
-        label="Stock"
-        type="number"
-        variant="outlined"
-        fullWidth
-        sx={{ mb: 2 }}
-        value={nuevo.stock}
-        onChange={e => setNuevo({ ...nuevo, stock: e.target.value })}
-      />
-      <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1, mt: 2 }} onClick={handleRegistrarProducto}>
-        Registrar producto
-      </Button>
-      {confirmacion && <Typography sx={{ mt: 2, color: '#388e3c', textAlign: 'center', fontWeight: 'bold' }}>{confirmacion}</Typography>}
-
-      <FormControl fullWidth sx={{ mb: 2 }}>
-        <InputLabel id="categoria-consulta-label">Consultar por categoría</InputLabel>
-        <Select
-          labelId="categoria-consulta-label"
-          value={categoriaConsulta}
-          label="Consultar por categoría"
-          onChange={e => setCategoriaConsulta(e.target.value)}
-        >
-          {categorias.map(cat => (
-            <MenuItem key={cat} value={cat}>{cat}</MenuItem>
-          ))}
-        </Select>
-      </FormControl>
-      <Button variant="outlined" color="primary" fullWidth sx={{ mb: 2 }} onClick={handleConsultarPorCategoria}>
-        Consultar productos por categoría
-      </Button>
-      <TextField
-        label="Buscar producto por nombre"
-        variant="outlined"
-        fullWidth
-        sx={{ mb: 2 }}
-        value={nombreConsulta}
-        onChange={e => setNombreConsulta(e.target.value)}
-      />
-      <Button variant="outlined" color="primary" fullWidth sx={{ mb: 2 }} onClick={handleBuscarPorNombre}>
-        Buscar producto por nombre
-      </Button>
-      {productosConsulta.length > 0 && (
-        <Box sx={{ mt: 2 }}>
+    <Fade in={true} timeout={400}>
+      <Paper elevation={3} sx={{ p: 3, borderRadius: 3, mb: 2 }}>
+        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom>
+          Inventario
+        </Typography>
+        <FormControl fullWidth sx={{ mb: 2 }}>
+          <InputLabel id="categoria-label">Categoría</InputLabel>
+          <Select
+            labelId="categoria-label"
+            value={categoriaSeleccionada}
+            label="Categoría"
+            onChange={e => setCategoriaSeleccionada(e.target.value)}
+          >
+            {categorias.map(cat => (
+              <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        {isAdmin && (
+          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
+            <TextField
+              label="Nueva categoría"
+              variant="outlined"
+              value={nuevaCategoria}
+              onChange={e => setNuevaCategoria(e.target.value)}
+              sx={{ flex: 1 }}
+            />
+            <Button variant="contained" color="primary" onClick={handleAgregarCategoria}>
+              Agregar
+            </Button>
+          </Box>
+        )}
+        <TextField
+          label="Nombre del producto"
+          variant="outlined"
+          fullWidth
+          sx={{ mb: 2 }}
+          value={nuevo.nombre}
+          onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
+        />
+        <TextField
+          label="Código"
+          variant="outlined"
+          fullWidth
+          sx={{ mb: 2 }}
+          value={nuevo.codigo}
+          onChange={e => setNuevo({ ...nuevo, codigo: e.target.value })}
+        />
+        <TextField
+          label="Precio proveedor"
+          type="number"
+          variant="outlined"
+          fullWidth
+          sx={{ mb: 2 }}
+          value={nuevo.precioProveedor}
+          onChange={e => setNuevo({ ...nuevo, precioProveedor: e.target.value })}
+        />
+        <TextField
+          label="Precio cliente"
+          type="number"
+          variant="outlined"
+          fullWidth
+          sx={{ mb: 2 }}
+          value={nuevo.precioCliente}
+          onChange={e => setNuevo({ ...nuevo, precioCliente: e.target.value })}
+        />
+        <TextField
+          label="Stock"
+          type="number"
+          variant="outlined"
+          fullWidth
+          sx={{ mb: 2 }}
+          value={nuevo.stock}
+          onChange={e => setNuevo({ ...nuevo, stock: e.target.value })}
+        />
+        <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1, mt: 2 }} onClick={handleRegistrarProducto}>
+          Registrar producto
+        </Button>
+        {confirmacion && <Typography sx={{ mt: 2, color: '#388e3c', textAlign: 'center', fontWeight: 'bold' }}>{confirmacion}</Typography>}
+        <Box sx={{ mt: 4 }}>
           <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
-            Resultados de consulta:
+            Productos registrados:
           </Typography>
           <Table>
             <TableHead>
@@ -219,25 +211,109 @@ function Inventario({ usuario }) {
                 <TableCell>Código</TableCell>
                 <TableCell>Nombre</TableCell>
                 <TableCell>Stock</TableCell>
-                <TableCell>Precio</TableCell>
+                <TableCell>Precio Proveedor</TableCell>
+                <TableCell>Precio Cliente</TableCell>
                 <TableCell>Categoría</TableCell>
+                {isAdmin && <TableCell sx={{ fontWeight: 'bold', color: '#b71c1c' }}>Acciones</TableCell>}
               </TableRow>
             </TableHead>
             <TableBody>
-              {productosConsulta.map((p, i) => (
-                <TableRow key={i}>
+              {productos.map((p, i) => (
+                <TableRow key={p.id || i}>
                   <TableCell>{p.codigo}</TableCell>
                   <TableCell>{p.nombre}</TableCell>
                   <TableCell>{p.stock}</TableCell>
+                  <TableCell>${p.precioProveedor}</TableCell>
                   <TableCell>${p.precioCliente}</TableCell>
                   <TableCell>{p.categoria}</TableCell>
+                  {isAdmin && (
+                    <TableCell>
+                      <Button
+                        variant="contained"
+                        color="primary"
+                        size="small"
+                        sx={{ mr: 1, minWidth: 80 }}
+                        onClick={() => handleEditar(p)}
+                      >
+                        Editar
+                      </Button>
+                      <Button
+                        variant="contained"
+                        color="error"
+                        size="small"
+                        sx={{ minWidth: 80 }}
+                        onClick={() => handleEliminarProducto(p.id)}
+                      >
+                        Eliminar
+                      </Button>
+                    </TableCell>
+                  )}
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Box>
-      )}
-    </Box>
+        {/* Modal de edición */}
+        <Dialog open={editOpen} onClose={() => setEditOpen(false)}>
+          <DialogTitle>Editar producto</DialogTitle>
+          <DialogContent>
+            {editProducto && (
+              <Box sx={{ display: 'flex', flexDirection: 'column', gap: 2, mt: 1 }}>
+                <TextField
+                  label="Nombre"
+                  name="nombre"
+                  value={editProducto.nombre}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+                <TextField
+                  label="Código"
+                  name="codigo"
+                  value={editProducto.codigo}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+                <TextField
+                  label="Precio proveedor"
+                  name="precioProveedor"
+                  type="number"
+                  value={editProducto.precioProveedor}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+                <TextField
+                  label="Precio cliente"
+                  name="precioCliente"
+                  type="number"
+                  value={editProducto.precioCliente}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+                <TextField
+                  label="Stock"
+                  name="stock"
+                  type="number"
+                  value={editProducto.stock}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+                <TextField
+                  label="Categoría"
+                  name="categoria"
+                  value={editProducto.categoria}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+              </Box>
+            )}
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setEditOpen(false)}>Cancelar</Button>
+            <Button variant="contained" color="primary" onClick={handleGuardarEdicion}>Guardar</Button>
+          </DialogActions>
+        </Dialog>
+      </Paper>
+    </Fade>
   );
 }
 

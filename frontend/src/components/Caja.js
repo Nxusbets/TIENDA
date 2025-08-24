@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Box, Typography, TextField, Button } from '@mui/material';
+import { Box, Typography, TextField, Button, Paper, Fade } from '@mui/material';
 import * as XLSX from 'xlsx';
 import { db } from '../firebase';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
@@ -107,55 +107,57 @@ function Caja({ usuario }) {
   };
 
   return (
-    <Box sx={{
-      maxWidth: 400,
-      mx: 'auto',
-      bgcolor: '#fff',
-      color: '#b71c1c',
-      p: 4,
-      borderRadius: 3,
-      boxShadow: '0 4px 24px rgba(0,0,0,0.10)',
-      mt: 6
-    }}>
-      <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', textAlign: 'center' }}>
-        Caja - {usuario}
-      </Typography>
-      {!cajaAbierta ? (
-        <>
-          <Typography sx={{ mb: 2 }}>Ingresa el monto de apertura:</Typography>
-          <TextField
-            label="Monto de apertura"
-            type="number"
-            variant="outlined"
-            fullWidth
-            value={aperturaMonto}
-            onChange={e => setAperturaMonto(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleApertura}>
-            Abrir caja
-          </Button>
-        </>
-      ) : (
-        <>
-          <Typography sx={{ mb: 2 }}>Ingresos obtenidos: <b>${ingresosTotales.toFixed(2)}</b></Typography>
-          <TextField
-            label="Monto de entrega"
-            type="number"
-            variant="outlined"
-            fullWidth
-            value={entrega}
-            onChange={e => setEntrega(e.target.value)}
-            sx={{ mb: 2 }}
-          />
-          <Button variant="contained" color="success" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleCorte}>
-            Corte de caja y descargar resumen
-          </Button>
-        </>
-      )}
-      {confirmacion && <Typography sx={{ mt: 2, color: '#388e3c', textAlign: 'center', fontWeight: 'bold' }}>{confirmacion}</Typography>}
-    </Box>
+    <Fade in={true} timeout={400}>
+      <Paper elevation={3} sx={{ p: 3, borderRadius: 3, mb: 2, background: '#fff' }}>
+        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom>
+          Caja - {usuario}
+        </Typography>
+        {!cajaAbierta ? (
+          <>
+            <Typography sx={{ mb: 2, color: 'primary.main' }}>Ingresa el monto de apertura:</Typography>
+            <TextField
+              label="Monto de apertura"
+              type="number"
+              variant="outlined"
+              fullWidth
+              value={aperturaMonto}
+              onChange={e => setAperturaMonto(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleApertura}>
+              Abrir caja
+            </Button>
+          </>
+        ) : (
+          <>
+            <Typography sx={{ mb: 2, color: 'primary.main' }}>
+              Ingresos obtenidos: <b>${ingresosTotales.toFixed(2)}</b>
+            </Typography>
+            <TextField
+              label="Monto de entrega"
+              type="number"
+              variant="outlined"
+              fullWidth
+              value={entrega}
+              onChange={e => setEntrega(e.target.value)}
+              sx={{ mb: 2 }}
+            />
+            <Button variant="contained" color="success" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleCorte}>
+              Corte de caja y descargar resumen
+            </Button>
+          </>
+        )}
+        {confirmacion && (
+          <Typography sx={{ mt: 2, color: 'primary.main', textAlign: 'center', fontWeight: 'bold' }}>
+            {confirmacion}
+          </Typography>
+        )}
+      </Paper>
+    </Fade>
   );
 }
 
 export default Caja;
+
+
+
