@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { Box, Button, MenuItem, Select, InputLabel, FormControl, TextField, Paper, Typography, Fade } from '@mui/material';
-import * as XLSX from 'xlsx';
 import { db } from '../firebase';
 import { collection, getDocs, query, where } from 'firebase/firestore';
+import ExcelJS from 'exceljs';
 
 const PERIODOS = [
   { label: 'Día', value: 'dia' },
@@ -21,13 +21,12 @@ function Reporte() {
   // Reporte de ventas
   const handleDescargarVentas = async () => {
     const ventasRef = collection(db, 'ventas');
-    let ventas = [];
     const snapshot = await getDocs(ventasRef);
-    ventas = snapshot.docs.map(doc => doc.data());
-
-    let filtro = () => true;
+    const ventas = snapshot.docs.map(doc => doc.data());
     const fechaBase = fecha ? new Date(fecha) : new Date();
 
+    // mismo filtro que antes
+    let filtro = () => true;
     if (periodo === 'dia') {
       filtro = v => {
         const f = new Date(v.fecha);
@@ -55,40 +54,94 @@ function Reporte() {
     }
 
     const ventasFiltradas = ventas.filter(filtro);
-    const data = ventasFiltradas.map(v => ({
-      Fecha: v.fecha,
-      Usuario: v.usuario,
-      Total: v.total,
-      Productos: v.productos.map(p => `${p.nombre} (x${p.cantidad})`).join(', '),
-      MetodoPago: v.metodoPago
-    }));
 
-    // Calcular total de ingresos
-    const totalIngresos = ventasFiltradas.reduce((acc, v) => acc + (Number(v.total) || 0), 0);
+    // Crear workbook y hoja
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Ventas', { properties: { tabColor: { argb: 'FFB71C1C' } } });
 
-    // Agregar fila de total de ingresos al final
-    if (data.length > 0) {
-      data.push({
-        Fecha: '',
-        Usuario: '',
-        Total: '',
-        Productos: '',
-        MetodoPago: '',
-      });
-    }
-    data.push({
-      Fecha: '',
-      Usuario: '',
-      Total: `TOTAL INGRESOS: $${totalIngresos.toFixed(2)}`,
-      Productos: '',
-      MetodoPago: ''
+    // Título
+    const title = `REPORTE DE VENTAS - ${PERIODOS.find(p => p.value === periodo)?.label || periodo}`;
+    ws.mergeCells('A1:E1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = title;
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+    titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFB71C1C' } };
+
+    // Cabecera en fila 3 (dejamos fila 2 vacía)
+    const headerRow = ws.addRow([]);
+    ws.addRow([]); // row 2 blank
+    const header = ['Fecha', 'Usuario', 'Total', 'Productos', 'MetodoPago'];
+    const headerR = ws.addRow(header);
+    headerR.eachCell(cell => {
+      cell.font = { name: 'Arial', bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF37474F' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+      cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
     });
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Ventas');
-    XLSX.writeFile(wb, `reporte_ventas_${periodo}_${Date.now()}.xlsx`);
-    setConfirmacion('Reporte de ventas descargado');
+    // Datos
+    ventasFiltradas.forEach(v => {
+      const row = [
+        new Date(v.fecha).toLocaleString(),
+        v.usuario,
+        Number(v.total) || 0,
+        (v.productos || []).map(p => `${p.nombre} (x${p.cantidad})`).join(', '),
+        v.metodoPago || ''
+      ];
+      const r = ws.addRow(row);
+      // formato moneda en columna 3 (C)
+      const totalCell = r.getCell(3);
+      totalCell.numFmt = '"$"#,##0.00;[Red]\-"$"#,##0.00';
+      // wrap text for productos
+      r.getCell(4).alignment = { wrapText: true, vertical: 'top' };
+    });
+
+    // Fila de total ingresos
+    ws.addRow([]);
+    const totalIngresos = ventasFiltradas.reduce((acc, v) => acc + (Number(v.total) || 0), 0);
+    const totalRow = ws.addRow(['', '', totalIngresos, 'TOTAL INGRESOS', '']);
+    totalRow.getCell(3).font = { bold: true };
+    totalRow.getCell(3).numFmt = '"$"#,##0.00;[Red]\-"$"#,##0.00';
+    totalRow.getCell(4).font = { bold: true };
+
+    // Anchos de columnas
+    ws.columns = [
+      { key: 'fecha', width: 20 },
+      { key: 'usuario', width: 20 },
+      { key: 'total', width: 12 },
+      { key: 'productos', width: 60 },
+      { key: 'metodo', width: 16 },
+    ];
+
+    // Zebra rows para datos (comienza en fila 4, index 4 en Excel)
+    const startDataRow = 4;
+    ventasFiltradas.forEach((_, i) => {
+      const rowNumber = startDataRow + i;
+      if (i % 2 === 0) {
+        const row = ws.getRow(rowNumber);
+        row.eachCell(cell => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF5F5F5' } };
+        });
+      }
+    });
+
+    // Ajustes finales
+    ws.views = [{ state: 'frozen', ySplit: 3 }];
+
+    // Generar archivo y forzar descarga en navegador
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte_ventas_${periodo}_${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    setConfirmacion('Reporte de ventas descargado (con estilos)');
     setTimeout(() => setConfirmacion(''), 2000);
   };
 
@@ -104,20 +157,68 @@ function Reporte() {
       const snapshot = await getDocs(productosRef);
       productos = snapshot.docs.map(doc => doc.data());
     }
-    const data = productos.map(p => ({
-      Nombre: p.nombre,
-      Código: p.codigo,
-      Stock: p.stock,
-      PrecioCliente: p.precioCliente,
-      PrecioProveedor: p.precioProveedor,
-      Categoría: p.categoria
-    }));
 
-    const ws = XLSX.utils.json_to_sheet(data);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'Inventario');
-    XLSX.writeFile(wb, `reporte_inventario_${categoria || 'total'}_${Date.now()}.xlsx`);
-    setConfirmacion('Reporte de inventario descargado');
+    const wb = new ExcelJS.Workbook();
+    const ws = wb.addWorksheet('Inventario', { properties: { tabColor: { argb: 'FF1976D2' } } });
+
+    // Título
+    ws.mergeCells('A1:F1');
+    const titleCell = ws.getCell('A1');
+    titleCell.value = `REPORTE DE INVENTARIO${categoria ? ' - ' + categoria : ''}`;
+    titleCell.font = { name: 'Arial', size: 16, bold: true, color: { argb: 'FFFFFFFF' } };
+    titleCell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1976D2' } };
+    titleCell.alignment = { horizontal: 'center', vertical: 'middle' };
+
+    ws.addRow([]);
+    const header = ['Nombre', 'Código', 'Stock', 'PrecioCliente', 'PrecioProveedor', 'Categoría'];
+    const headerR = ws.addRow(header);
+    headerR.eachCell(cell => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF455A64' } };
+      cell.alignment = { horizontal: 'center', vertical: 'middle' };
+    });
+
+    productos.forEach((p, i) => {
+      const r = ws.addRow([
+        p.nombre,
+        p.codigo,
+        Number(p.stock) || 0,
+        Number(p.precioCliente) || 0,
+        Number(p.precioProveedor) || 0,
+        p.categoria || ''
+      ]);
+      // formatear números
+      r.getCell(4).numFmt = '"$"#,##0.00;[Red]\-"$"#,##0.00';
+      r.getCell(5).numFmt = '"$"#,##0.00;[Red]\-"$"#,##0.00';
+      r.getCell(3).numFmt = '0';
+      if (i % 2 === 0) {
+        r.eachCell(cell => {
+          cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFF8F9FA' } };
+        });
+      }
+    });
+
+    ws.columns = [
+      { key: 'nombre', width: 30 },
+      { key: 'codigo', width: 16 },
+      { key: 'stock', width: 8 },
+      { key: 'precioCliente', width: 14 },
+      { key: 'precioProveedor', width: 14 },
+      { key: 'categoria', width: 16 },
+    ];
+
+    const buffer = await wb.xlsx.writeBuffer();
+    const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `reporte_inventario_${categoria || 'total'}_${Date.now()}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
+    setConfirmacion('Reporte de inventario descargado (con estilos)');
     setTimeout(() => setConfirmacion(''), 2000);
   };
 
@@ -186,3 +287,4 @@ function Reporte() {
 }
 
 export default Reporte;
+
