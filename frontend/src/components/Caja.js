@@ -108,44 +108,21 @@ function Caja({ usuario }) {
 
   return (
     <Fade in={true} timeout={400}>
-      <Paper elevation={3} sx={{ p: 3, borderRadius: 3, mb: 2, background: '#fff' }}>
-        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom>
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3, mb: 2, background: '#fff' }}>
+        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom sx={{ fontSize: { xs: '1.1rem', md: '1.25rem' } }}>
           Caja - {usuario}
         </Typography>
         {!cajaAbierta ? (
-          <>
-            <Typography sx={{ mb: 2, color: 'primary.main' }}>Ingresa el monto de apertura:</Typography>
-            <TextField
-              label="Monto de apertura"
-              type="number"
-              variant="outlined"
-              fullWidth
-              value={aperturaMonto}
-              onChange={e => setAperturaMonto(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleApertura}>
-              Abrir caja
-            </Button>
-          </>
+          <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <TextField label="Monto de apertura" type="number" variant="outlined" fullWidth value={aperturaMonto} onChange={e => setAperturaMonto(e.target.value)} />
+            <Button variant="contained" color="error" sx={{ minWidth: { xs: '100%', sm: 160 } }} onClick={handleApertura}>Abrir caja</Button>
+          </Box>
         ) : (
-          <>
-            <Typography sx={{ mb: 2, color: 'primary.main' }}>
-              Ingresos obtenidos: <b>${ingresosTotales.toFixed(2)}</b>
-            </Typography>
-            <TextField
-              label="Monto de entrega"
-              type="number"
-              variant="outlined"
-              fullWidth
-              value={entrega}
-              onChange={e => setEntrega(e.target.value)}
-              sx={{ mb: 2 }}
-            />
-            <Button variant="contained" color="success" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleCorte}>
-              Corte de caja y descargar resumen
-            </Button>
-          </>
+          <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center' }}>
+            <Typography sx={{ color: 'primary.main' }}>Ingresos obtenidos: <b>${ingresosTotales.toFixed(2)}</b></Typography>
+            <TextField label="Monto de entrega" type="number" variant="outlined" value={entrega} onChange={e => setEntrega(e.target.value)} sx={{ minWidth: { xs: '100%', sm: 200 } }} />
+            <Button variant="contained" color="success" sx={{ minWidth: { xs: '100%', sm: 200 } }} onClick={handleCorte}>Corte de caja y descargar resumen</Button>
+          </Box>
         )}
         {confirmacion && (
           <Typography sx={{ mt: 2, color: 'primary.main', textAlign: 'center', fontWeight: 'bold' }}>
@@ -158,6 +135,7 @@ function Caja({ usuario }) {
 }
 
 export default Caja;
+     
 
 
 

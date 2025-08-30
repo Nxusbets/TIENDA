@@ -127,13 +127,12 @@ function Reporte() {
         <Typography variant="h5" color="primary" fontWeight={700} gutterBottom>
           Reporte
         </Typography>
-        <Box sx={{ maxWidth: 600, mx: 'auto', bgcolor: '#fff', color: '#b71c1c', p: 4, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', mt: 4 }}>
+        <Box sx={{ maxWidth: 700, mx: 'auto', bgcolor: '#fff', color: '#b71c1c', p: { xs: 2, sm: 4 }, borderRadius: 3, boxShadow: '0 4px 24px rgba(0,0,0,0.10)', mt: 4 }}>
           <Typography variant="h5" sx={{ mb: 2, fontWeight: 'bold', textAlign: 'center' }}>
             Reportes
           </Typography>
-          <Box sx={{ mb: 4 }}>
-            <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Reporte de ventas</Typography>
-            <FormControl fullWidth sx={{ mb: 2 }}>
+          <Box sx={{ mb: 4, display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2 }}>
+            <FormControl fullWidth>
               <InputLabel id="periodo-label">Periodo</InputLabel>
               <Select
                 labelId="periodo-label"
@@ -154,13 +153,12 @@ function Reporte() {
               InputLabelProps={{ shrink: true }}
               value={fecha}
               onChange={e => setFecha(e.target.value)}
-              sx={{ mb: 2 }}
             />
-            <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleDescargarVentas}>
-              Descargar reporte de ventas
-            </Button>
           </Box>
-          <Box>
+          <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1 }} onClick={handleDescargarVentas}>
+            Descargar reporte de ventas
+          </Button>
+          <Box sx={{ mt: 4 }}>
             <Typography variant="subtitle1" sx={{ mb: 2, fontWeight: 'bold' }}>Reporte de inventario</Typography>
             <FormControl fullWidth sx={{ mb: 2 }}>
               <InputLabel id="categoria-label">Categoría</InputLabel>

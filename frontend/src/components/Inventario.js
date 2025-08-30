@@ -2,6 +2,8 @@ import React, { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, MenuItem, Select, InputLabel, FormControl, Table, TableHead, TableRow, TableCell, TableBody, Paper, Fade, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
 import { db } from '../firebase';
 import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
 
 const CATEGORIAS_DEFAULT = [
   'Hogar',
@@ -20,15 +22,24 @@ function Inventario({ usuario }) {
   const [confirmacion, setConfirmacion] = useState('');
   const [editOpen, setEditOpen] = useState(false);
   const [editProducto, setEditProducto] = useState(null);
-  const isAdmin = usuario === 'jericho888873@gmail.com';
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const isAdmin = usuario && usuario.toLowerCase() === 'jericho888873@gmail.com';
 
   useEffect(() => {
+    console.log('Usuario en Inventario:', usuario);
     const fetchProductos = async () => {
-      const snapshot = await getDocs(collection(db, 'productos'));
-      setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      try {
+        const snapshot = await getDocs(collection(db, 'productos'));
+        setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      } catch (err) {
+        setError('Error al cargar productos');
+      } finally {
+        setLoading(false);
+      }
     };
     fetchProductos();
-  }, []);
+  }, [usuario]);
 
   const handleChange = e => {
     setNuevo({ ...nuevo, [e.target.name]: e.target.value });
@@ -87,7 +98,15 @@ function Inventario({ usuario }) {
   };
 
   const handleEditar = producto => {
-    setEditProducto({ ...producto });
+    setEditProducto({
+      ...producto,
+      nombre: producto.nombre ?? '',
+      codigo: producto.codigo ?? '',
+      precioProveedor: producto.precioProveedor ?? '',
+      precioCliente: producto.precioCliente ?? '',
+      stock: producto.stock ?? '',
+      categoria: producto.categoria ?? ''
+    });
     setEditOpen(true);
   };
 
@@ -121,12 +140,44 @@ function Inventario({ usuario }) {
     setTimeout(() => setConfirmacion(''), 2000);
   };
 
+  const handlePriceChange = (id, field, value) => {
+    setProductos(productos.map(prod =>
+      prod.id === id ? { ...prod, [field]: value } : prod
+    ));
+  };
+
+  const saveProduct = async (id) => {
+    const product = productos.find(p => p.id === id);
+    try {
+      await updateDoc(doc(db, 'productos', id), {
+        precioProveedor: product.precioProveedor,
+        precioCliente: product.precioCliente,
+      });
+      alert('Producto actualizado');
+      // Recargar productos
+      const snapshot = await getDocs(collection(db, 'productos'));
+      setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    } catch (err) {
+      alert('Error al actualizar producto');
+    }
+  };
+
+  const theme = useTheme();
+  const isTablet = useMediaQuery(theme.breakpoints.down('md')); // true en md y menores
+
+  if (loading) return <p>Cargando inventario...</p>;
+  if (error) return <p>{error}</p>;
+  if (!usuario) {
+    return <p>Usuario no definido. Inicia sesión con tu cuenta de admin.</p>;
+  }
+
   return (
     <Fade in={true} timeout={400}>
-      <Paper elevation={3} sx={{ p: 3, borderRadius: 3, mb: 2 }}>
-        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom>
+      <Paper elevation={3} sx={{ p: { xs: 2, sm: 3 }, borderRadius: 3, mb: 2 }}>
+        <Typography variant="h5" color="primary" fontWeight={700} gutterBottom sx={{ fontSize: { xs: '1.1rem', md: '1.5rem' } }}>
           Inventario
         </Typography>
+
         <FormControl fullWidth sx={{ mb: 2 }}>
           <InputLabel id="categoria-label">Categoría</InputLabel>
           <Select
@@ -140,119 +191,100 @@ function Inventario({ usuario }) {
             ))}
           </Select>
         </FormControl>
+
+        {/* Admin controls: stack responsive */}
         {isAdmin && (
-          <Box sx={{ display: 'flex', gap: 2, mb: 2 }}>
-            <TextField
-              label="Nueva categoría"
-              variant="outlined"
-              value={nuevaCategoria}
-              onChange={e => setNuevaCategoria(e.target.value)}
-              sx={{ flex: 1 }}
-            />
-            <Button variant="contained" color="primary" onClick={handleAgregarCategoria}>
+          <Box sx={{ display: 'flex', gap: 2, mb: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
+            <TextField label="Nueva categoría" variant="outlined" value={nuevaCategoria} onChange={e => setNuevaCategoria(e.target.value)} sx={{ flex: 1 }} />
+            <Button variant="contained" color="primary" onClick={handleAgregarCategoria} sx={{ minWidth: { xs: '100%', sm: 140 } }}>
               Agregar
             </Button>
           </Box>
         )}
-        <TextField
-          label="Nombre del producto"
-          variant="outlined"
-          fullWidth
-          sx={{ mb: 2 }}
-          value={nuevo.nombre}
-          onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })}
-        />
-        <TextField
-          label="Código"
-          variant="outlined"
-          fullWidth
-          sx={{ mb: 2 }}
-          value={nuevo.codigo}
-          onChange={e => setNuevo({ ...nuevo, codigo: e.target.value })}
-        />
-        <TextField
-          label="Precio proveedor"
-          type="number"
-          variant="outlined"
-          fullWidth
-          sx={{ mb: 2 }}
-          value={nuevo.precioProveedor}
-          onChange={e => setNuevo({ ...nuevo, precioProveedor: e.target.value })}
-        />
-        <TextField
-          label="Precio cliente"
-          type="number"
-          variant="outlined"
-          fullWidth
-          sx={{ mb: 2 }}
-          value={nuevo.precioCliente}
-          onChange={e => setNuevo({ ...nuevo, precioCliente: e.target.value })}
-        />
-        <TextField
-          label="Stock"
-          type="number"
-          variant="outlined"
-          fullWidth
-          sx={{ mb: 2 }}
-          value={nuevo.stock}
-          onChange={e => setNuevo({ ...nuevo, stock: e.target.value })}
-        />
+
+        {/* Inputs: fullWidth on small screens */}
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 16 }}>
+          <TextField label="Nombre del producto" fullWidth value={nuevo.nombre} onChange={e => setNuevo({ ...nuevo, nombre: e.target.value })} />
+          <TextField label="Código" fullWidth value={nuevo.codigo} onChange={e => setNuevo({ ...nuevo, codigo: e.target.value })} />
+          <TextField label="Precio proveedor" type="number" fullWidth value={nuevo.precioProveedor} onChange={e => setNuevo({ ...nuevo, precioProveedor: e.target.value })} />
+          <TextField label="Precio cliente" type="number" fullWidth value={nuevo.precioCliente} onChange={e => setNuevo({ ...nuevo, precioCliente: e.target.value })} />
+        </Box>
+
+        <TextField label="Stock" type="number" fullWidth sx={{ mt: 2 }} value={nuevo.stock} onChange={e => setNuevo({ ...nuevo, stock: e.target.value })} />
+
         <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1, mt: 2 }} onClick={handleRegistrarProducto}>
           Registrar producto
         </Button>
+
         {confirmacion && <Typography sx={{ mt: 2, color: '#388e3c', textAlign: 'center', fontWeight: 'bold' }}>{confirmacion}</Typography>}
+
+        {/* Responsive product list: tarjetas en tablet, tabla en desktop */}
         <Box sx={{ mt: 4 }}>
           <Typography variant="subtitle1" sx={{ mb: 1, fontWeight: 'bold' }}>
             Productos registrados:
           </Typography>
-          <Table>
-            <TableHead>
-              <TableRow>
-                <TableCell>Código</TableCell>
-                <TableCell>Nombre</TableCell>
-                <TableCell>Stock</TableCell>
-                <TableCell>Precio Proveedor</TableCell>
-                <TableCell>Precio Cliente</TableCell>
-                <TableCell>Categoría</TableCell>
-                {isAdmin && <TableCell sx={{ fontWeight: 'bold', color: '#b71c1c' }}>Acciones</TableCell>}
-              </TableRow>
-            </TableHead>
-            <TableBody>
-              {productos.map((p, i) => (
-                <TableRow key={p.id || i}>
-                  <TableCell>{p.codigo}</TableCell>
-                  <TableCell>{p.nombre}</TableCell>
-                  <TableCell>{p.stock}</TableCell>
-                  <TableCell>${p.precioProveedor}</TableCell>
-                  <TableCell>${p.precioCliente}</TableCell>
-                  <TableCell>{p.categoria}</TableCell>
+
+          {isTablet ? (
+            <Box sx={{ display: 'grid', gap: 2 }}>
+              {productos.map((p) => (
+                <Paper key={p.id} elevation={1} sx={{ p: 2, display: 'flex', flexDirection: 'column', gap: 1 }}>
+                  <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 2, flexWrap: 'wrap' }}>
+                    <Box sx={{ minWidth: 0 }}>
+                      <Typography sx={{ fontWeight: 700, fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</Typography>
+                      <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>Código: {p.codigo}</Typography>
+                      <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>Categoría: {p.categoria}</Typography>
+                    </Box>
+                    <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
+                      <Typography sx={{ fontWeight: 700 }}>${Number(p.precioCliente || 0).toFixed(2)}</Typography>
+                      <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>Stock: {p.stock}</Typography>
+                    </Box>
+                  </Box>
                   {isAdmin && (
-                    <TableCell>
-                      <Button
-                        variant="contained"
-                        color="primary"
-                        size="small"
-                        sx={{ mr: 1, minWidth: 80 }}
-                        onClick={() => handleEditar(p)}
-                      >
-                        Editar
-                      </Button>
-                      <Button
-                        variant="contained"
-                        color="error"
-                        size="small"
-                        sx={{ minWidth: 80 }}
-                        onClick={() => handleEliminarProducto(p.id)}
-                      >
-                        Eliminar
-                      </Button>
-                    </TableCell>
+                    <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
+                      <Button variant="outlined" color="primary" size="small" onClick={() => handleEditar(p)}>Editar</Button>
+                      <Button variant="outlined" color="error" size="small" onClick={() => handleEliminarProducto(p.id)}>Eliminar</Button>
+                    </Box>
                   )}
-                </TableRow>
+                </Paper>
               ))}
-            </TableBody>
-          </Table>
+            </Box>
+          ) : (
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: 720 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Código</TableCell>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Stock</TableCell>
+                    <TableCell>Precio Proveedor</TableCell>
+                    <TableCell>Precio Cliente</TableCell>
+                    <TableCell>Categoría</TableCell>
+                    {isAdmin && <TableCell sx={{ fontWeight: 'bold', color: '#b71c1c' }}>Acciones</TableCell>}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {productos.map((p) => (
+                    <TableRow key={p.id}>
+                      <TableCell>{p.codigo}</TableCell>
+                      <TableCell>{p.nombre}</TableCell>
+                      <TableCell>{p.stock}</TableCell>
+                      <TableCell>${p.precioProveedor}</TableCell>
+                      <TableCell>${p.precioCliente}</TableCell>
+                      <TableCell>{p.categoria}</TableCell>
+                      {isAdmin && (
+                        <TableCell>
+                          <Button variant="contained" color="primary" size="small" sx={{ mr: 1 }} onClick={() => handleEditar(p)}>Editar</Button>
+                          <Button variant="contained" color="error" size="small" onClick={() => handleEliminarProducto(p.id)}>Eliminar</Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </Box>
+          )}
         </Box>
+
         {/* Modal de edición */}
         <Dialog open={editOpen} onClose={() => setEditOpen(false)}>
           <DialogTitle>Editar producto</DialogTitle>
@@ -262,14 +294,14 @@ function Inventario({ usuario }) {
                 <TextField
                   label="Nombre"
                   name="nombre"
-                  value={editProducto.nombre}
+                  value={editProducto.nombre ?? ''}
                   onChange={handleEditChange}
                   fullWidth
                 />
                 <TextField
                   label="Código"
                   name="codigo"
-                  value={editProducto.codigo}
+                  value={editProducto.codigo ?? ''}
                   onChange={handleEditChange}
                   fullWidth
                 />
@@ -277,7 +309,7 @@ function Inventario({ usuario }) {
                   label="Precio proveedor"
                   name="precioProveedor"
                   type="number"
-                  value={editProducto.precioProveedor}
+                  value={editProducto.precioProveedor ?? ''}
                   onChange={handleEditChange}
                   fullWidth
                 />
@@ -285,7 +317,7 @@ function Inventario({ usuario }) {
                   label="Precio cliente"
                   name="precioCliente"
                   type="number"
-                  value={editProducto.precioCliente}
+                  value={editProducto.precioCliente ?? ''}
                   onChange={handleEditChange}
                   fullWidth
                 />
@@ -293,14 +325,14 @@ function Inventario({ usuario }) {
                   label="Stock"
                   name="stock"
                   type="number"
-                  value={editProducto.stock}
+                  value={editProducto.stock ?? ''}
                   onChange={handleEditChange}
                   fullWidth
                 />
                 <TextField
                   label="Categoría"
                   name="categoria"
-                  value={editProducto.categoria}
+                  value={editProducto.categoria ?? ''}
                   onChange={handleEditChange}
                   fullWidth
                 />
@@ -318,3 +350,6 @@ function Inventario({ usuario }) {
 }
 
 export default Inventario;
+
+
+

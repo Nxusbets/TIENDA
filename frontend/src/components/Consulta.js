@@ -127,29 +127,31 @@ function Consulta({ usuario }) {
               value={busquedaInventario}
               onChange={e => setBusquedaInventario(e.target.value)}
             />
-            <Table>
-              <TableHead>
-                <TableRow>
-                  <TableCell>Código</TableCell>
-                  <TableCell>Nombre</TableCell>
-                  <TableCell>Stock</TableCell>
-                </TableRow>
-              </TableHead>
-              <TableBody>
-                {inventario
-                  .filter(p =>
-                    !busquedaInventario.trim() ||
-                    (p.nombre && p.nombre.toLowerCase().includes(busquedaInventario.trim().toLowerCase()))
-                  )
-                  .map(p => (
-                    <TableRow key={p.id}>
-                      <TableCell>{p.codigo}</TableCell>
-                      <TableCell>{p.nombre}</TableCell>
-                      <TableCell>{p.stock}</TableCell>
-                    </TableRow>
-                  ))}
-              </TableBody>
-            </Table>
+            <Box sx={{ overflowX: 'auto' }}>
+              <Table sx={{ minWidth: 600 }}>
+                <TableHead>
+                  <TableRow>
+                    <TableCell>Código</TableCell>
+                    <TableCell>Nombre</TableCell>
+                    <TableCell>Stock</TableCell>
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {inventario
+                    .filter(p =>
+                      !busquedaInventario.trim() ||
+                      (p.nombre && p.nombre.toLowerCase().includes(busquedaInventario.trim().toLowerCase()))
+                    )
+                    .map(p => (
+                      <TableRow key={p.id}>
+                        <TableCell>{p.codigo}</TableCell>
+                        <TableCell>{p.nombre}</TableCell>
+                        <TableCell>{p.stock}</TableCell>
+                      </TableRow>
+                    ))}
+                </TableBody>
+              </Table>
+            </Box>
           </Box>
         )}
       </Paper>

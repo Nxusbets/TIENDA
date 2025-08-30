@@ -76,6 +76,7 @@ function App() {
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [authLoading, setAuthLoading] = useState(true);
 
   useEffect(() => {
     const unsubscribe = auth.onAuthStateChanged(user => {
@@ -92,6 +93,7 @@ function App() {
         setUserEmail('');
         setOpen(true);
       }
+      setAuthLoading(false);
     });
     return () => unsubscribe();
   }, []);
@@ -124,6 +126,10 @@ function App() {
   };
 
   const isAdmin = userEmail === 'jericho888873@gmail.com';
+
+  if (authLoading) {
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Cargando...</div>;
+  }
 
   return (
     <ThemeProvider theme={theme}>
@@ -177,13 +183,13 @@ function App() {
             </Button>
           </Box>
         </Modal>
-        <Container maxWidth="xl" sx={{ mt: 6, mb: 6, p: 0, borderRadius: 4, boxShadow: '0 8px 32px 0 rgba(0,0,0,0.18)', background: 'rgba(255,255,255,0.04)', minHeight: '80vh' }}>
+        <Container maxWidth="xl" sx={{ mt: 6, mb: 6, p: { xs: 1, sm: 2, md: 0 }, borderRadius: 4, boxShadow: '0 8px 32px 0 rgba(0,0,0,0.18)', background: 'rgba(255,255,255,0.04)', minHeight: '80vh' }}>
           <Box sx={{ display: 'flex', height: '100%' }}>
             {/* Lado izquierdo: menú vertical */}
             <Box sx={{
-              width: 180,
+              width: { xs: 88, sm: 140, md: 180 },
               bgcolor: 'rgba(183,28,28,0.92)',
-              borderRadius: '18px 0 0 18px',
+              borderRadius: { xs: 2, sm: '18px 0 0 18px' },
               boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
               display: 'flex',
               flexDirection: 'column',
@@ -269,8 +275,8 @@ function App() {
             {/* Lado derecho: contenido dinámico */}
             <Box sx={{
               flex: 1,
-              p: 4,
-              borderRadius: '0 24px 24px 0',
+              p: { xs: 2, sm: 3, md: 4 },
+              borderRadius: { xs: '8px', sm: '0 24px 24px 0' },
               background: 'rgba(255,255,255,0.07)',
               minHeight: '80vh',
               boxShadow: '0 2px 8px rgba(0,0,0,0.10)',
@@ -282,11 +288,11 @@ function App() {
                 Tienda de Abarrotes
               </Typography>
               <Box sx={{ flex: 1 }}>
-                {tab === 0 && isAdmin && <Inventario />}
+                {tab === 0 && isAdmin && <Inventario usuario={userEmail} />}
                 {tab === 1 && <Ventas usuario={userEmail} />}
                 {tab === 2 && <Caja usuario={userEmail} />}
                 {tab === 3 && <Consulta usuario={userEmail} />}
-                {tab === 4 && isAdmin && <Reporte />}
+                {tab === 4 && isAdmin && <Reporte usuario={userEmail} />}
               </Box>
             </Box>
           </Box>
