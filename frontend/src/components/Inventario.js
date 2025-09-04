@@ -1,22 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, MenuItem, Select, InputLabel, FormControl, Table, TableHead, TableRow, TableCell, TableBody, Paper, Fade, Dialog, DialogTitle, DialogContent, DialogActions } from '@mui/material';
-import { db } from '../firebase';
-import { collection, addDoc, getDocs, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getDb } from '../firebase';
+import { collection, addDoc, doc, updateDoc, deleteDoc, onSnapshot } from 'firebase/firestore';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
 
-const CATEGORIAS_DEFAULT = [
-  'Hogar',
-  'Limpieza',
-  'Alimentos',
-  'Mascotas',
-  'Medicina'
-];
-
 function Inventario({ usuario }) {
   const [productos, setProductos] = useState([]);
-  const [nuevo, setNuevo] = useState({ codigo: '', nombre: '', precioProveedor: '', precioCliente: '', stock: '' });
-  const [categorias, setCategorias] = useState(CATEGORIAS_DEFAULT);
+  const [nuevo, setNuevo] = useState({ codigo: '', nombre: '', precioProveedor: '', precioCliente: '', stock: '', presentacion: '', stockLitros: '' });
+  const [categorias, setCategorias] = useState(['', 'Garrafones', 'Botellas', 'Accesorios']);
   const [nuevaCategoria, setNuevaCategoria] = useState('');
   const [categoriaSeleccionada, setCategoriaSeleccionada] = useState('');
   const [confirmacion, setConfirmacion] = useState('');
@@ -27,18 +19,24 @@ function Inventario({ usuario }) {
   const isAdmin = usuario && usuario.toLowerCase() === 'jericho888873@gmail.com';
 
   useEffect(() => {
-    console.log('Usuario en Inventario:', usuario);
-    const fetchProductos = async () => {
-      try {
-        const snapshot = await getDocs(collection(db, 'productos'));
-        setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-      } catch (err) {
-        setError('Error al cargar productos');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchProductos();
+    setLoading(true);
+    const db = getDb();
+    const colRef = collection(db, 'productos');
+
+    // suscripción en tiempo real: lee inicialmente y recibe cambios
+    const unsubscribe = onSnapshot(colRef, snap => {
+      // map + dedupe por id para evitar claves duplicadas
+      const list = snap.docs.map(d => ({ id: d.id, ...d.data() }));
+      const unique = Array.from(new Map(list.map(p => [p.id, p])).values());
+      setProductos(unique);
+      setLoading(false);
+    }, err => {
+      console.error('Error suscripción productos:', err);
+      setError('No se pudo cargar productos');
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, [usuario]);
 
   const handleChange = e => {
@@ -50,16 +48,28 @@ function Inventario({ usuario }) {
       alert('Solo el administrador puede agregar productos.');
       return;
     }
-    await addDoc(collection(db, 'productos'), {
-      ...nuevo,
-      precioProveedor: Number(nuevo.precioProveedor),
-      precioCliente: Number(nuevo.precioCliente),
-      stock: Number(nuevo.stock),
-    });
-    setNuevo({ codigo: '', nombre: '', precioProveedor: '', precioCliente: '', stock: '' });
-    // Recargar productos
-    const snapshot = await getDocs(collection(db, 'productos'));
-    setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+    try {
+      const db = getDb();
+      const data = {
+        ...nuevo,
+        precioProveedor: Number(nuevo.precioProveedor) || 0,
+        precioCliente: Number(nuevo.precioCliente) || 0,
+        stock: Number(nuevo.stock) || 0,
+        presentacion: nuevo.presentacion || '',
+        stockLitros: Number(nuevo.stockLitros) || 0,
+        categoria: categoriaSeleccionada || ''
+      };
+      const ref = await addDoc(collection(db, 'productos'), data);
+      // quitar actualización optimista: onSnapshot reflejará el nuevo documento
+      setNuevo({ codigo: '', nombre: '', precioProveedor: '', precioCliente: '', stock: '', presentacion: '', stockLitros: '' });
+      setCategoriaSeleccionada('');
+      setConfirmacion('Producto agregado');
+      setTimeout(() => setConfirmacion(''), 2000);
+    } catch (err) {
+      console.error(err);
+      setConfirmacion('Error al agregar producto');
+      setTimeout(() => setConfirmacion(''), 2000);
+    }
   };
 
   const handleAgregarCategoria = async () => {
@@ -69,32 +79,46 @@ function Inventario({ usuario }) {
       setTimeout(() => setConfirmacion(''), 2000);
       return;
     }
-    setCategorias([...categorias, nuevaCategoria.trim()]);
+    setCategorias(prev => [...prev, nuevaCategoria.trim()]);
     setNuevaCategoria('');
     setConfirmacion('Categoría agregada');
     setTimeout(() => setConfirmacion(''), 2000);
-    // Opcional: guarda la categoría en Firestore
-    // await addDoc(collection(db, 'categorias'), { nombre: nuevaCategoria.trim() });
+    // si quieres persistir categorías en Firestore, hacerlo aquí (opcional)
   };
 
   const handleRegistrarProducto = async () => {
-    if (!nuevo.nombre || !nuevo.codigo || !nuevo.precioProveedor || !nuevo.precioCliente || !nuevo.stock || !categoriaSeleccionada) {
-      setConfirmacion('Completa todos los campos');
+    if (!isAdmin) {
+      setConfirmacion('Solo admin puede registrar productos');
       setTimeout(() => setConfirmacion(''), 2000);
       return;
     }
-    await addDoc(collection(db, 'productos'), {
-      nombre: nuevo.nombre,
-      codigo: nuevo.codigo,
-      precioProveedor: Number(nuevo.precioProveedor),
-      precioCliente: Number(nuevo.precioCliente),
-      stock: Number(nuevo.stock),
-      categoria: categoriaSeleccionada
-    });
-    setNuevo({ codigo: '', nombre: '', precioProveedor: '', precioCliente: '', stock: '' });
-    setCategoriaSeleccionada('');
-    setConfirmacion('Producto registrado');
-    setTimeout(() => setConfirmacion(''), 2000);
+    if (!nuevo.nombre || !nuevo.codigo || !nuevo.precioProveedor || !nuevo.precioCliente || nuevo.stock === '' || !categoriaSeleccionada || !nuevo.presentacion) {
+      setConfirmacion('Completa todos los campos y agrega la presentación (ej. "20 L")');
+      setTimeout(() => setConfirmacion(''), 2000);
+      return;
+    }
+    try {
+      const db = getDb();
+      const data = {
+        nombre: nuevo.nombre,
+        codigo: nuevo.codigo,
+        precioProveedor: Number(nuevo.precioProveedor),
+        precioCliente: Number(nuevo.precioCliente),
+        stock: Number(nuevo.stock),
+        presentacion: nuevo.presentacion || '',
+        stockLitros: Number(nuevo.stockLitros) || 0,
+        categoria: categoriaSeleccionada
+      };
+      const ref = await addDoc(collection(db, 'productos'), data);
+      setNuevo({ codigo: '', nombre: '', precioProveedor: '', precioCliente: '', stock: '', presentacion: '', stockLitros: '' });
+      setCategoriaSeleccionada('');
+      setConfirmacion('Producto registrado');
+      setTimeout(() => setConfirmacion(''), 2000);
+    } catch (err) {
+      console.error(err);
+      setConfirmacion('Error al registrar producto');
+      setTimeout(() => setConfirmacion(''), 2000);
+    }
   };
 
   const handleEditar = producto => {
@@ -105,7 +129,9 @@ function Inventario({ usuario }) {
       precioProveedor: producto.precioProveedor ?? '',
       precioCliente: producto.precioCliente ?? '',
       stock: producto.stock ?? '',
-      categoria: producto.categoria ?? ''
+      categoria: producto.categoria ?? '',
+      presentacion: producto.presentacion ?? '',
+      stockLitros: producto.stockLitros ?? ''
     });
     setEditOpen(true);
   };
@@ -116,28 +142,49 @@ function Inventario({ usuario }) {
 
   const handleGuardarEdicion = async () => {
     if (!editProducto) return;
-    await updateDoc(doc(db, 'productos', editProducto.id), {
-      nombre: editProducto.nombre,
-      codigo: editProducto.codigo,
-      precioProveedor: Number(editProducto.precioProveedor),
-      precioCliente: Number(editProducto.precioCliente),
-      stock: Number(editProducto.stock),
-      categoria: editProducto.categoria
-    });
-    setEditOpen(false);
-    setEditProducto(null);
-    // Recargar productos
-    const snapshot = await getDocs(collection(db, 'productos'));
-    setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
-    setConfirmacion('Producto editado');
-    setTimeout(() => setConfirmacion(''), 2000);
+    try {
+      const db = getDb();
+      const id = editProducto.id;
+      const payload = {
+        nombre: editProducto.nombre,
+        codigo: editProducto.codigo,
+        precioProveedor: Number(editProducto.precioProveedor) || 0,
+        precioCliente: Number(editProducto.precioCliente) || 0,
+        stock: Number(editProducto.stock) || 0,
+        categoria: editProducto.categoria || '',
+        presentacion: editProducto.presentacion || '',
+        stockLitros: Number(editProducto.stockLitros) || 0
+      };
+      await updateDoc(doc(db, 'productos', id), payload);
+      // actualizar estado local sin relectura completa
+      setProductos(prev => prev.map(p => p.id === id ? { id, ...payload } : p));
+      setEditOpen(false);
+      setEditProducto(null);
+      setConfirmacion('Producto editado');
+      setTimeout(() => setConfirmacion(''), 2000);
+    } catch (err) {
+      console.error(err);
+      setConfirmacion('Error al guardar cambios');
+      setTimeout(() => setConfirmacion(''), 2000);
+    }
   };
 
   const handleEliminarProducto = async id => {
-    await deleteDoc(doc(db, 'productos', id));
-    setProductos(productos.filter(p => p.id !== id));
-    setConfirmacion('Producto eliminado');
-    setTimeout(() => setConfirmacion(''), 2000);
+    if (!isAdmin) {
+      alert('Solo el administrador puede eliminar productos.');
+      return;
+    }
+    try {
+      const db = getDb();
+      await deleteDoc(doc(db, 'productos', id));
+      setProductos(prev => prev.filter(p => p.id !== id));
+      setConfirmacion('Producto eliminado');
+      setTimeout(() => setConfirmacion(''), 2000);
+    } catch (err) {
+      console.error(err);
+      setConfirmacion('Error al eliminar producto');
+      setTimeout(() => setConfirmacion(''), 2000);
+    }
   };
 
   const handlePriceChange = (id, field, value) => {
@@ -148,17 +195,20 @@ function Inventario({ usuario }) {
 
   const saveProduct = async (id) => {
     const product = productos.find(p => p.id === id);
+    if (!product) return;
     try {
+      const db = getDb();
       await updateDoc(doc(db, 'productos', id), {
-        precioProveedor: product.precioProveedor,
-        precioCliente: product.precioCliente,
+        precioProveedor: Number(product.precioProveedor) || 0,
+        precioCliente: Number(product.precioCliente) || 0,
       });
-      alert('Producto actualizado');
-      // Recargar productos
-      const snapshot = await getDocs(collection(db, 'productos'));
-      setProductos(snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })));
+      setConfirmacion('Producto actualizado');
+      setTimeout(() => setConfirmacion(''), 2000);
+      // onSnapshot actualizará el estado si cambia en la base; aquí ya actualizamos localmente
     } catch (err) {
-      alert('Error al actualizar producto');
+      console.error(err);
+      setConfirmacion('Error al actualizar producto');
+      setTimeout(() => setConfirmacion(''), 2000);
     }
   };
 
@@ -210,9 +260,13 @@ function Inventario({ usuario }) {
           <TextField label="Precio cliente" type="number" fullWidth value={nuevo.precioCliente} onChange={e => setNuevo({ ...nuevo, precioCliente: e.target.value })} />
         </Box>
 
-        <TextField label="Stock" type="number" fullWidth sx={{ mt: 2 }} value={nuevo.stock} onChange={e => setNuevo({ ...nuevo, stock: e.target.value })} />
+        <TextField label="Stock (unidades)" type="number" fullWidth sx={{ mt: 2 }} value={nuevo.stock} onChange={e => setNuevo({ ...nuevo, stock: e.target.value })} />
+        <Box sx={{ display: 'grid', gridTemplateColumns: { xs: '1fr', sm: '1fr 1fr' }, gap: 2, mt: 2 }}>
+          <TextField label="Presentación (ej. 20L)" fullWidth value={nuevo.presentacion} onChange={e => setNuevo({ ...nuevo, presentacion: e.target.value })} />
+          <TextField label="Stock (litros)" type="number" fullWidth value={nuevo.stockLitros} onChange={e => setNuevo({ ...nuevo, stockLitros: e.target.value })} />
+        </Box>
 
-        <Button variant="contained" color="error" fullWidth sx={{ fontWeight: 'bold', py: 1, mt: 2 }} onClick={handleRegistrarProducto}>
+        <Button variant="contained" color="primary" fullWidth sx={{ fontWeight: 'bold', py: 1, mt: 2 }} onClick={handleRegistrarProducto}>
           Registrar producto
         </Button>
 
@@ -233,6 +287,7 @@ function Inventario({ usuario }) {
                       <Typography sx={{ fontWeight: 700, fontSize: '1rem', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.nombre}</Typography>
                       <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>Código: {p.codigo}</Typography>
                       <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>Categoría: {p.categoria}</Typography>
+                      <Typography sx={{ fontSize: '0.85rem', color: 'text.secondary' }}>Stock litros: {Number(p.stockLitros || 0)}</Typography>
                     </Box>
                     <Box sx={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 1 }}>
                       <Typography sx={{ fontWeight: 700 }}>${Number(p.precioCliente || 0).toFixed(2)}</Typography>
@@ -242,7 +297,7 @@ function Inventario({ usuario }) {
                   {isAdmin && (
                     <Box sx={{ display: 'flex', gap: 1, mt: 1, flexWrap: 'wrap' }}>
                       <Button variant="outlined" color="primary" size="small" onClick={() => handleEditar(p)}>Editar</Button>
-                      <Button variant="outlined" color="error" size="small" onClick={() => handleEliminarProducto(p.id)}>Eliminar</Button>
+                      <Button variant="outlined" color="primary" size="small" onClick={() => handleEliminarProducto(p.id)}>Eliminar</Button>
                     </Box>
                   )}
                 </Paper>
@@ -255,11 +310,12 @@ function Inventario({ usuario }) {
                   <TableRow>
                     <TableCell>Código</TableCell>
                     <TableCell>Nombre</TableCell>
+                    <TableCell>Stock (L)</TableCell>
                     <TableCell>Stock</TableCell>
                     <TableCell>Precio Proveedor</TableCell>
                     <TableCell>Precio Cliente</TableCell>
                     <TableCell>Categoría</TableCell>
-                    {isAdmin && <TableCell sx={{ fontWeight: 'bold', color: '#b71c1c' }}>Acciones</TableCell>}
+                    {isAdmin && <TableCell sx={{ fontWeight: 'bold', color: '#0d47a1' }}>Acciones</TableCell>}
                   </TableRow>
                 </TableHead>
                 <TableBody>
@@ -267,6 +323,7 @@ function Inventario({ usuario }) {
                     <TableRow key={p.id}>
                       <TableCell>{p.codigo}</TableCell>
                       <TableCell>{p.nombre}</TableCell>
+                      <TableCell>{Number(p.stockLitros || 0)}</TableCell>
                       <TableCell>{p.stock}</TableCell>
                       <TableCell>${p.precioProveedor}</TableCell>
                       <TableCell>${p.precioCliente}</TableCell>
@@ -274,7 +331,7 @@ function Inventario({ usuario }) {
                       {isAdmin && (
                         <TableCell>
                           <Button variant="contained" color="primary" size="small" sx={{ mr: 1 }} onClick={() => handleEditar(p)}>Editar</Button>
-                          <Button variant="contained" color="error" size="small" onClick={() => handleEliminarProducto(p.id)}>Eliminar</Button>
+                          <Button variant="contained" color="primary" size="small" onClick={() => handleEliminarProducto(p.id)}>Eliminar</Button>
                         </TableCell>
                       )}
                     </TableRow>
@@ -330,6 +387,21 @@ function Inventario({ usuario }) {
                   fullWidth
                 />
                 <TextField
+                  label="Presentación"
+                  name="presentacion"
+                  value={editProducto.presentacion ?? ''}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+                <TextField
+                  label="Stock litros"
+                  name="stockLitros"
+                  type="number"
+                  value={editProducto.stockLitros ?? ''}
+                  onChange={handleEditChange}
+                  fullWidth
+                />
+                <TextField
                   label="Categoría"
                   name="categoria"
                   value={editProducto.categoria ?? ''}
@@ -350,6 +422,3 @@ function Inventario({ usuario }) {
 }
 
 export default Inventario;
-
-
-

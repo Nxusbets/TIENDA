@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Box, Typography, TextField, Button, Paper, Fade } from '@mui/material';
 import * as XLSX from 'xlsx';
-import { db } from '../firebase';
+import { getDb } from '../firebase';
 import { collection, addDoc, query, where, getDocs } from 'firebase/firestore';
 
 function Caja({ usuario }) {
@@ -15,8 +15,11 @@ function Caja({ usuario }) {
   const [entrega, setEntrega] = useState('');
   const [confirmacion, setConfirmacion] = useState('');
 
+  // permiso admin
+  const isAdmin = usuario === 'jericho888873@gmail.com';
+
   // Calcula ingresos totales de ventas registradas por el usuario en el turno
-  const ingresosTotales = ingresos.reduce((acc, v) => acc + v.total, 0);
+  const ingresosTotales = ingresos.reduce((acc, v) => acc + (Number(v.total) || 0), 0);
 
   useEffect(() => {
     // Si hay apertura guardada, mantener caja abierta
@@ -32,6 +35,7 @@ function Caja({ usuario }) {
     const fetchVentas = async () => {
       if (cajaAbierta && aperturaFecha && usuario) {
         const aperturaDate = new Date(aperturaFecha);
+        const db = getDb();
         const ventasRef = collection(db, 'ventas');
         const q = query(
           ventasRef,
@@ -43,67 +47,95 @@ function Caja({ usuario }) {
           .map(doc => doc.data())
           .filter(v => new Date(v.fecha) >= aperturaDate);
         setIngresos(ventas);
-        setTotal(ventas.reduce((acc, v) => acc + v.total, 0));
+        setTotal(ventas.reduce((acc, v) => acc + (Number(v.total) || 0), 0));
       }
     };
     fetchVentas();
   }, [cajaAbierta, aperturaFecha, usuario]);
 
   const handleApertura = async () => {
-    if (!aperturaMonto || isNaN(aperturaMonto)) {
-      setConfirmacion('Ingresa un monto válido');
+    if (!isAdmin) {
+      setConfirmacion('Solo administradores pueden abrir la caja.');
+      setTimeout(() => setConfirmacion(''), 2500);
       return;
     }
-    await addDoc(collection(db, 'caja'), {
-      apertura: new Date().toISOString(),
-      monto: Number(aperturaMonto),
-      total: 0,
-    });
-    const aperturaStr = new Date().toISOString();
-    setAperturaFecha(aperturaStr);
-    setCajaAbierta(true);
-    localStorage.setItem('aperturaCajaFecha', aperturaStr);
-    localStorage.setItem('aperturaCajaMonto', aperturaMonto);
-    setConfirmacion('Caja abierta correctamente');
-    setTimeout(() => setConfirmacion(''), 2000);
+    if (!aperturaMonto || isNaN(aperturaMonto)) {
+      setConfirmacion('Ingresa un monto válido');
+      setTimeout(() => setConfirmacion(''), 2000);
+      return;
+    }
+    try {
+      const db = getDb();
+      await addDoc(collection(db, 'caja'), {
+        apertura: new Date().toISOString(),
+        monto: Number(aperturaMonto),
+        total: 0,
+        usuario: usuario || 'Admin'
+      });
+      const aperturaStr = new Date().toISOString();
+      setAperturaFecha(aperturaStr);
+      setCajaAbierta(true);
+      localStorage.setItem('aperturaCajaFecha', aperturaStr);
+      localStorage.setItem('aperturaCajaMonto', aperturaMonto);
+      setConfirmacion('Caja abierta correctamente');
+      setTimeout(() => setConfirmacion(''), 2000);
+    } catch (err) {
+      console.error('Error al abrir caja:', err);
+      setConfirmacion('Error al abrir la caja');
+      setTimeout(() => setConfirmacion(''), 2500);
+    }
   };
 
   const handleCorte = async () => {
-    if (!entrega || isNaN(entrega)) {
-      setConfirmacion('Ingresa el monto de entrega');
+    if (!isAdmin) {
+      setConfirmacion('Solo administradores pueden realizar el corte de caja.');
+      setTimeout(() => setConfirmacion(''), 2500);
       return;
     }
-    await addDoc(collection(db, 'caja'), {
-      cierre: new Date().toISOString(),
-      total,
-    });
-    // Genera resumen para Excel
-    const productosVendidos = ingresos.map(v => v.productos).flat();
-    const productosResumen = productosVendidos.map(p =>
-      `${p.nombre} (x${p.cantidad})`
-    ).join(', ');
-    const resumen = [
-      ['Usuario', usuario],
-      ['Ventas (ingresos)', ingresosTotales],
-      ['Productos vendidos', productosResumen],
-      ['Apertura', aperturaMonto],
-      ['Entrega', entrega],
-      ['Fecha', new Date().toLocaleString()],
-    ];
-    const ws = XLSX.utils.aoa_to_sheet(resumen);
-    const wb = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(wb, ws, 'ResumenCaja');
-    XLSX.writeFile(wb, `corte_caja_${usuario}_${Date.now()}.xlsx`);
-    setCierre(new Date().toLocaleString());
-    setEntrega('');
-    setTotal(0);
-    setConfirmacion('Corte de caja realizado y archivo descargado');
-    setCajaAbierta(false);
-    setAperturaFecha('');
-    setAperturaMonto('');
-    localStorage.removeItem('aperturaCajaFecha');
-    localStorage.removeItem('aperturaCajaMonto');
-    setTimeout(() => setConfirmacion(''), 2000);
+    if (!entrega || isNaN(entrega)) {
+      setConfirmacion('Ingresa el monto de entrega');
+      setTimeout(() => setConfirmacion(''), 2000);
+      return;
+    }
+    try {
+      const db = getDb();
+      await addDoc(collection(db, 'caja'), {
+        cierre: new Date().toISOString(),
+        total,
+        usuario: usuario || 'Admin'
+      });
+      // Genera resumen para Excel
+      const productosVendidos = ingresos.map(v => v.productos).flat();
+      const productosResumen = productosVendidos.map(p =>
+        `${p.nombre} (x${p.cantidad})`
+      ).join(', ');
+      const resumen = [
+        ['Usuario', usuario],
+        ['Ventas (ingresos)', ingresosTotales],
+        ['Productos vendidos', productosResumen],
+        ['Apertura', aperturaMonto],
+        ['Entrega', entrega],
+        ['Fecha', new Date().toLocaleString()],
+      ];
+      const ws = XLSX.utils.aoa_to_sheet(resumen);
+      const wb = XLSX.utils.book_new();
+      XLSX.utils.book_append_sheet(wb, ws, 'ResumenCaja');
+      XLSX.writeFile(wb, `corte_caja_${usuario}_${Date.now()}.xlsx`);
+      setCierre(new Date().toLocaleString());
+      setEntrega('');
+      setTotal(0);
+      setConfirmacion('Corte de caja realizado y archivo descargado');
+      setCajaAbierta(false);
+      setAperturaFecha('');
+      setAperturaMonto('');
+      localStorage.removeItem('aperturaCajaFecha');
+      localStorage.removeItem('aperturaCajaMonto');
+      setTimeout(() => setConfirmacion(''), 2000);
+    } catch (err) {
+      console.error('Error en corte de caja:', err);
+      setConfirmacion('Error al realizar el corte de caja');
+      setTimeout(() => setConfirmacion(''), 2500);
+    }
   };
 
   return (
@@ -112,18 +144,58 @@ function Caja({ usuario }) {
         <Typography variant="h5" color="primary" fontWeight={700} gutterBottom sx={{ fontSize: { xs: '1.1rem', md: '1.25rem' } }}>
           Caja - {usuario}
         </Typography>
+
         {!cajaAbierta ? (
           <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' } }}>
-            <TextField label="Monto de apertura" type="number" variant="outlined" fullWidth value={aperturaMonto} onChange={e => setAperturaMonto(e.target.value)} />
-            <Button variant="contained" color="error" sx={{ minWidth: { xs: '100%', sm: 160 } }} onClick={handleApertura}>Abrir caja</Button>
+            <TextField
+              label="Monto de apertura"
+              type="number"
+              variant="outlined"
+              fullWidth
+              value={aperturaMonto}
+              onChange={e => setAperturaMonto(e.target.value)}
+              disabled={!isAdmin}
+            />
+            <Button
+              variant="contained"
+              color="primary"
+              sx={{ minWidth: { xs: '100%', sm: 160 } }}
+              onClick={handleApertura}
+              disabled={!isAdmin}
+            >
+              Abrir caja
+            </Button>
           </Box>
         ) : (
           <Box sx={{ display: 'flex', gap: 2, flexDirection: { xs: 'column', sm: 'row' }, alignItems: 'center' }}>
             <Typography sx={{ color: 'primary.main' }}>Ingresos obtenidos: <b>${ingresosTotales.toFixed(2)}</b></Typography>
-            <TextField label="Monto de entrega" type="number" variant="outlined" value={entrega} onChange={e => setEntrega(e.target.value)} sx={{ minWidth: { xs: '100%', sm: 200 } }} />
-            <Button variant="contained" color="success" sx={{ minWidth: { xs: '100%', sm: 200 } }} onClick={handleCorte}>Corte de caja y descargar resumen</Button>
+            <TextField
+              label="Monto de entrega"
+              type="number"
+              variant="outlined"
+              value={entrega}
+              onChange={e => setEntrega(e.target.value)}
+              sx={{ minWidth: { xs: '100%', sm: 200 } }}
+              disabled={!isAdmin}
+            />
+            <Button
+              variant="contained"
+              color="success"
+              sx={{ minWidth: { xs: '100%', sm: 200 } }}
+              onClick={handleCorte}
+              disabled={!isAdmin}
+            >
+              Corte de caja y descargar resumen
+            </Button>
           </Box>
         )}
+
+        {!isAdmin && (
+          <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
+            Sólo administradores pueden abrir o cerrar caja y descargar cortes.
+          </Typography>
+        )}
+
         {confirmacion && (
           <Typography sx={{ mt: 2, color: 'primary.main', textAlign: 'center', fontWeight: 'bold' }}>
             {confirmacion}
@@ -135,7 +207,7 @@ function Caja({ usuario }) {
 }
 
 export default Caja;
-     
+
 
 
 

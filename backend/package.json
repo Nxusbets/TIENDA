@@ -1,5 +1,5 @@
 {
-  "name": "tienda-backend",
+  "name": "purificadora-backend",
   "version": "1.0.0",
   "main": "index.js",
   "dependencies": {
@@ -8,6 +8,8 @@
     "cors": "^2.8.5"
   },
   "scripts": {
-    "start": "node index.js"
+  "start": "node index.js",
+  "migrate:schema:dry": "node scripts/migrate_purificadora_schema.js",
+  "seed:purificadora": "node scripts/seed_purificadora_data.js"
   }
 }
